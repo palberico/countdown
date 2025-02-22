@@ -50,7 +50,7 @@ function CountdownDisplay({ targetDate }) {
           sx={{
             fontSize: {
               xs: "30vh", // mobile: slightly smaller
-              sm: "60vh", // larger screens: bigger
+              sm: "60vh", // larger screens
             },
             lineHeight: 1,
             margin: 0,
@@ -73,7 +73,7 @@ function CountdownDisplay({ targetDate }) {
       </Box>
     );
   } else {
-    // Under 1 day => show hours/minutes
+    // Under 1 day => show hours/minutes (smaller than days)
     return (
       <Box
         display="flex"
@@ -85,8 +85,8 @@ function CountdownDisplay({ targetDate }) {
         <Typography
           sx={{
             fontSize: {
-              xs: "25vh",
-              sm: "50vh",
+              xs: "20vh", // reduced for mobile
+              sm: "35vh", // reduced for larger screens
             },
             lineHeight: 1,
             margin: 0,
