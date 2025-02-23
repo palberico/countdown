@@ -8,17 +8,11 @@ const modalStyle = {
   left: "50%",
   transform: "translate(-50%, -50%)",
   bgcolor: "background.paper",
-  p: {
-    xs: 2, // smaller padding on extra-small (mobile) screens
-    sm: 4, // larger padding on small+ screens
-  },
+  p: { xs: 2, sm: 4 },
   outline: "none",
-  borderRadius: 2,  // Rounded corners
-  width: {
-    xs: "90vw",      // 90% viewport width on mobile
-    sm: 400,         // fixed width on small+ screens
-  },
-  maxWidth: "95vw",  // ensure it doesn't exceed screen width on small devices
+  borderRadius: 2,
+  width: { xs: "90vw", sm: 400 },
+  maxWidth: "95vw",
 };
 
 function EventSelectionModal({ open, onClose, events, onSelectEvent }) {
@@ -37,7 +31,14 @@ function EventSelectionModal({ open, onClose, events, onSelectEvent }) {
                   onClose();
                 }}
               >
-                {eventItem.name}
+                <Box>
+                  <Typography variant="body1">
+                    {eventItem.name}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {new Date(eventItem.date).toLocaleDateString()}
+                  </Typography>
+                </Box>
               </ListItemButton>
             </ListItem>
           ))}

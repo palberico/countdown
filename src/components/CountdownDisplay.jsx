@@ -23,12 +23,7 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
       >
         <Typography
           variant="h2"
-          sx={{
-            fontSize: {
-              xs: "8vh",
-              sm: "8vh",
-            },
-          }}
+          sx={{ fontSize: { xs: "8vh", sm: "8vh" } }}
         >
           It's here!
         </Typography>
@@ -43,9 +38,8 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
   const hrs = Math.floor((totalSeconds / 3600) % 24);
   const days = Math.floor(totalSeconds / 86400);
 
-  // If < 1 day left, ALWAYS show h/m/s
+  // If <1 day => always show H:M:S
   if (days < 1) {
-    // hours / minutes / seconds
     return (
       <Box
         display="flex"
@@ -54,12 +48,10 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
         justifyContent="center"
         sx={{ height: "80vh", width: "100%", overflow: "hidden" }}
       >
+        {/* Big H:M:S */}
         <Typography
           sx={{
-            fontSize: {
-              xs: "20vh",
-              sm: "35vh",
-            },
+            fontSize: { xs: "20vh", sm: "35vh" },
             lineHeight: 1,
             margin: 0,
             padding: 0,
@@ -69,11 +61,9 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
         </Typography>
         <Typography
           sx={{
-            fontSize: {
-              xs: "4vh",
-              sm: "4vh",
-            },
+            fontSize: { xs: "4vh", sm: "4vh" },
             lineHeight: 1,
+            mt: 3, // extra spacing above the "Left" text
           }}
         >
           Left
@@ -82,9 +72,8 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
     );
   }
 
-  // If 1 day or more
+  // If days >= 1
   if (countdownMode === "days") {
-    // Show days
     return (
       <Box
         display="flex"
@@ -93,12 +82,10 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
         justifyContent="center"
         sx={{ height: "80vh", width: "100%", overflow: "hidden" }}
       >
+        {/* Big Days */}
         <Typography
           sx={{
-            fontSize: {
-              xs: "30vh",
-              sm: "60vh",
-            },
+            fontSize: { xs: "30vh", sm: "60vh" },
             lineHeight: 1,
             margin: 0,
             padding: 0,
@@ -108,11 +95,9 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
         </Typography>
         <Typography
           sx={{
-            fontSize: {
-              xs: "4vh",
-              sm: "4vh",
-            },
+            fontSize: { xs: "4vh", sm: "4vh" },
             lineHeight: 1,
+            mt: 3, // extra spacing above text
           }}
         >
           {days === 1 ? "Day" : "Days"}
@@ -120,8 +105,7 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
       </Box>
     );
   } else {
-    // countdownMode === "hms" => convert entire time to hours + min + sec
-    // totalHours = days*24 + hrs
+    // "hms" => total hours + mins + secs
     const totalHours = days * 24 + hrs;
     return (
       <Box
@@ -133,10 +117,7 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
       >
         <Typography
           sx={{
-            fontSize: {
-              xs: "20vh",
-              sm: "25vh",
-            },
+            fontSize: { xs: "15vh", sm: "25vh" },
             lineHeight: 1,
             margin: 0,
             padding: 0,
@@ -146,11 +127,9 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
         </Typography>
         <Typography
           sx={{
-            fontSize: {
-              xs: "4vh",
-              sm: "4vh",
-            },
+            fontSize: { xs: "4vh", sm: "4vh" },
             lineHeight: 1,
+            mt: 5,
           }}
         >
           Left
