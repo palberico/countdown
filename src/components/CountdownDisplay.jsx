@@ -1,10 +1,17 @@
 // src/CountdownDisplay.jsx
-import React from "react";
+import React, { useEffect } from "react";
 import useCountdown from "../components/hooks/useCountdown";
 import { Box, Typography } from "@mui/material";
 
-function CountdownDisplay({ targetDate }) {
+function CountdownDisplay({ targetDate, eventId, onCountdownFinish }) {
   const timeLeft = useCountdown(targetDate);
+
+  // Call parent when timeLeft <= 0
+  useEffect(() => {
+    if (timeLeft <= 0 && eventId && onCountdownFinish) {
+      onCountdownFinish(eventId);
+    }
+  }, [timeLeft, eventId, onCountdownFinish]);
 
   if (timeLeft <= 0) {
     return (
@@ -19,8 +26,8 @@ function CountdownDisplay({ targetDate }) {
           variant="h2"
           sx={{
             fontSize: {
-              xs: "8vh", // extra-small screens
-              sm: "8vh", // small screens and up
+              xs: "8vh",
+              sm: "8vh",
             },
           }}
         >
@@ -30,8 +37,9 @@ function CountdownDisplay({ targetDate }) {
     );
   }
 
-  // Convert milliseconds into time units
+  // Convert ms -> time units
   const totalSeconds = Math.floor(timeLeft / 1000);
+  const seconds = totalSeconds % 60;
   const minutes = Math.floor((totalSeconds / 60) % 60);
   const hours = Math.floor((totalSeconds / 3600) % 24);
   const days = Math.floor(totalSeconds / 86400);
@@ -49,8 +57,8 @@ function CountdownDisplay({ targetDate }) {
         <Typography
           sx={{
             fontSize: {
-              xs: "30vh", // mobile: slightly smaller
-              sm: "60vh", // larger screens
+              xs: "30vh",
+              sm: "60vh",
             },
             lineHeight: 1,
             margin: 0,
@@ -73,7 +81,7 @@ function CountdownDisplay({ targetDate }) {
       </Box>
     );
   } else {
-    // Under 1 day => show hours/minutes (smaller than days)
+    // < 1 day => show hours : minutes : seconds
     return (
       <Box
         display="flex"
@@ -85,15 +93,15 @@ function CountdownDisplay({ targetDate }) {
         <Typography
           sx={{
             fontSize: {
-              xs: "20vh", // reduced for mobile
-              sm: "35vh", // reduced for larger screens
+              xs: "20vh",
+              sm: "35vh",
             },
             lineHeight: 1,
             margin: 0,
             padding: 0,
           }}
         >
-          {hours}h {minutes}m
+          {hours}h {minutes}m {seconds}s
         </Typography>
         <Typography
           sx={{

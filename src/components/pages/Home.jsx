@@ -16,43 +16,61 @@ import CountdownDisplay from "../CountdownDisplay";
 import LoginModal from "../LoginModal";
 
 import { useFirebase } from "../context/FirebaseContext";
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 
 // Icons
 import AddIcon from "@mui/icons-material/Add";
 import ListIcon from "@mui/icons-material/List";
 
+// Confetti
+import Confetti from "react-confetti";
+
 function Home() {
-  const { db, user, logout } = useFirebase(); // <-- get logout function
+  const { db, user, logout } = useFirebase();
+
+  // Events + Selected
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  // Modals
   const [selectionModalOpen, setSelectionModalOpen] = useState(false);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
-  // Loading & notifications
+  // Loading & Notifications
   const [loading, setLoading] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
+  // Confetti
+  const [confettiEventId, setConfettiEventId] = useState(null);
+  const [confettiTimeoutId, setConfettiTimeoutId] = useState(null);
+
+  // Helper: Show a notification
   const showNotification = (message, severity = "success") => {
     setSnackbarMessage(message);
     setSnackbarSeverity(severity);
     setSnackbarOpen(true);
   };
-  const handleCloseSnackbar = () => {
-    setSnackbarOpen(false);
-  };
+  const handleCloseSnackbar = () => setSnackbarOpen(false);
 
+  // =========================
+  // ========== FETCH =========
+  // =========================
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);
       try {
         let fetchedEvents = [];
         if (!db) {
-          // No Firestore: use local mock
+          // No Firestore: mock data
           fetchedEvents = [
             { id: "1", name: "Cruise", date: "2025-04-01T00:00:00" },
             { id: "2", name: "Disneyland", date: "2025-05-15T10:30:00" },
@@ -60,28 +78,18 @@ function Home() {
           showNotification("Loaded mock events (no Firestore).");
         } else {
           const querySnapshot = await getDocs(collection(db, "events"));
-          querySnapshot.forEach((doc) => {
-            fetchedEvents.push({ id: doc.id, ...doc.data() });
+          querySnapshot.forEach((docSnap) => {
+            fetchedEvents.push({ id: docSnap.id, ...docSnap.data() });
           });
           showNotification("Events loaded successfully from Firestore!");
         }
 
-        // Filter out past events if desired
-        const now = new Date();
-        const upcomingEvents = fetchedEvents.filter(
-          (ev) => new Date(ev.date) >= now
-        );
-
         // Sort by soonest date
-        upcomingEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
-        setEvents(upcomingEvents);
+        fetchedEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
 
+        setEvents(fetchedEvents);
         // Default to earliest
-        if (upcomingEvents.length > 0) {
-          setSelectedEvent(upcomingEvents[0]);
-        } else {
-          setSelectedEvent(null);
-        }
+        setSelectedEvent(fetchedEvents.length ? fetchedEvents[0] : null);
       } catch (error) {
         console.error(error);
         showNotification("Error fetching events!", "error");
@@ -93,7 +101,29 @@ function Home() {
     fetchEvents();
   }, [db]);
 
-  // Add Event (check login)
+  // =========================
+  // ========== LOGIN/LOGOUT =
+  // =========================
+  const handleLoginModalClose = () => {
+    setLoginModalOpen(false);
+    if (user) {
+      setSetupModalOpen(true);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      showNotification("Logged out successfully!");
+    } catch (err) {
+      console.error(err);
+      showNotification("Error during logout.", "error");
+    }
+  };
+
+  // =========================
+  // ========== ADD EVENT ====
+  // =========================
   const handleOpenEventSetup = () => {
     if (!user) {
       setLoginModalOpen(true);
@@ -102,23 +132,11 @@ function Home() {
     }
   };
 
-  // If user logs in, open event modal
-  const handleLoginModalClose = () => {
-    setLoginModalOpen(false);
-    if (user) {
-      setSetupModalOpen(true);
-    }
-  };
-
-  const handleSelectEvent = (event) => {
-    setSelectedEvent(event);
-  };
-
   const handleSaveEvent = async (eventData) => {
     setLoading(true);
     try {
       if (!db) {
-        // local approach
+        // Local
         const newEvent = {
           id: `${events.length + 1}`,
           ...eventData,
@@ -133,8 +151,6 @@ function Home() {
         const docRef = await addDoc(collection(db, "events"), eventData);
         const newEvent = { id: docRef.id, ...eventData };
         const newEvents = [...events, newEvent];
-
-        // Re-sort
         newEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
         setEvents(newEvents);
         setSelectedEvent(newEvents[0]);
@@ -148,20 +164,85 @@ function Home() {
     }
   };
 
+  // =========================
+  // ========== SELECT EVENT =
+  // =========================
+  const handleSelectEvent = (event) => {
+    // If there's an active confetti for a different event, stop it
+    if (confettiEventId && confettiEventId !== event.id) {
+      if (confettiTimeoutId) {
+        clearTimeout(confettiTimeoutId);
+        setConfettiTimeoutId(null);
+      }
+      // Delete old finished event
+      deleteEventById(confettiEventId);
+      // Stop confetti
+      setConfettiEventId(null);
+    }
+    // Now select the new event
+    setSelectedEvent(event);
+  };
+
+  // =========================
+  // ========== CONFETTI + DELETE LOGIC
+  // =========================
+  const startConfetti = (eventId) => {
+    if (confettiEventId) return; // already celebrating
+
+    setConfettiEventId(eventId);
+
+    // 1-minute timer
+    const timer = setTimeout(() => {
+      deleteEventById(eventId);
+      setConfettiEventId(null);
+      setConfettiTimeoutId(null);
+    }, 60000);
+
+    setConfettiTimeoutId(timer);
+  };
+
+  const deleteEventById = async (eventId) => {
+    try {
+      if (db) {
+        await deleteDoc(doc(db, "events", eventId));
+      }
+      setEvents((prev) => {
+        const updated = prev.filter((e) => e.id !== eventId);
+        if (!updated.length) {
+          setSelectedEvent(null);
+          return [];
+        }
+        updated.sort((a, b) => new Date(a.date) - new Date(b.date));
+        setSelectedEvent(updated[0]);
+        return updated;
+      });
+    } catch (err) {
+      console.error("Error deleting event:", err);
+    }
+  };
+
+  // If user loads and event is already past time, confetti triggers
+  useEffect(() => {
+    if (selectedEvent) {
+      const distance = new Date(selectedEvent.date).getTime() - Date.now();
+      if (distance <= 0 && !confettiEventId) {
+        startConfetti(selectedEvent.id);
+      }
+    }
+    return () => {
+      if (confettiTimeoutId) clearTimeout(confettiTimeoutId);
+    };
+  }, [selectedEvent, confettiEventId, confettiTimeoutId]);
+
+  // Called by CountdownDisplay if timeLeft <= 0
+  const handleCountdownFinish = (eventId) => {
+    startConfetti(eventId);
+  };
+
+  // Helper for selected date
   const getTargetDate = () => {
     if (!selectedEvent) return new Date();
     return new Date(selectedEvent.date);
-  };
-
-  // Handler for logging out
-  const handleLogout = async () => {
-    try {
-      await logout();
-      showNotification("Logged out successfully!");
-    } catch (err) {
-      console.error(err);
-      showNotification("Error during logout.", "error");
-    }
   };
 
   return (
@@ -175,7 +256,16 @@ function Home() {
         position: "relative",
       }}
     >
-      {/* LOGOUT BUTTON (only if logged in) */}
+      {/* If confettiEventId has a value, we mount Confetti; otherwise, we unmount it */}
+      {confettiEventId ? (
+        <Confetti
+          style={{ pointerEvents: "none" }}
+          run={true}
+          recycle={true}
+        />
+      ) : null}
+
+      {/* LOGOUT (only if logged in) */}
       {user && (
         <Button
           variant="outlined"
@@ -187,31 +277,34 @@ function Home() {
         </Button>
       )}
 
-        {/* Event Name */}
-        <Typography variant="h4" mb={2}>
-          {selectedEvent ? selectedEvent.name : "No Event Selected"}
-        </Typography>
+      {/* Event Name */}
+      <Typography variant="h4" mb={2}>
+        {selectedEvent ? selectedEvent.name : "No Event Selected"}
+      </Typography>
 
-      {/* BIG COUNTDOWN (70% screen width) */}
+      {/* Countdown */}
       {selectedEvent && (
         <Box
-        sx={{
-          width: {
-            xs: "90vw",  // 90% width on mobile
-            sm: "70vw",  // 70% on small+ screens
-          },
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-        }}
-      >
-        <CountdownDisplay targetDate={getTargetDate()} />
-      </Box>
-      
+          sx={{
+            width: {
+              xs: "90vw",
+              sm: "70vw",
+            },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+          }}
+        >
+          <CountdownDisplay
+            targetDate={getTargetDate()}
+            eventId={selectedEvent.id}
+            onCountdownFinish={handleCountdownFinish}
+          />
+        </Box>
       )}
 
-      {/* Hidden Access Point - Bottom Right */}
+      {/* Bottom Right => Event Selection */}
       <IconButton
         onClick={() => setSelectionModalOpen(true)}
         sx={{
@@ -225,7 +318,7 @@ function Home() {
         <ListIcon />
       </IconButton>
 
-      {/* Hidden Access Point - Bottom Left */}
+      {/* Bottom Left => Add Event */}
       <IconButton
         onClick={handleOpenEventSetup}
         sx={{
