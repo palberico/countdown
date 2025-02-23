@@ -13,6 +13,7 @@ dayjs.extend(timezone);
 // New Time Zone Select component
 import TimeZoneSelect from "./TimeZoneSelect";
 
+// MATCHES the styling from LoginModal:
 const modalStyle = {
   position: "absolute",
   top: "50%",
@@ -21,8 +22,8 @@ const modalStyle = {
   bgcolor: "background.paper",
   p: 4,
   outline: "none",
-  borderRadius: 2,
-  // Keep any other styling you already had
+  width: 300,       // same as in LoginModal
+  borderRadius: 2,  // rounding corners
 };
 
 function EventSetupModal({ open, onClose, onSave }) {
@@ -92,7 +93,7 @@ function EventSetupModal({ open, onClose, onSave }) {
           sx={{ mb: 2 }}
         />
 
-        {/* New Time Zone Dropdown */}
+        {/* Time Zone Dropdown */}
         <TimeZoneSelect value={tz} onChange={setTz} />
 
         <Button variant="contained" onClick={handleSave} fullWidth sx={{ mt: 2 }}>
