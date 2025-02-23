@@ -53,6 +53,10 @@ function Home() {
   const [confettiEventId, setConfettiEventId] = useState(null);
   const [confettiTimeoutId, setConfettiTimeoutId] = useState(null);
 
+  // NEW: The toggle state for how we display countdown
+  // "days" => display in days, "hms" => display in hours/minutes/seconds
+  const [countdownMode, setCountdownMode] = useState("days");
+
   // Helper: Show a notification
   const showNotification = (message, severity = "success") => {
     setSnackbarMessage(message);
@@ -86,8 +90,8 @@ function Home() {
 
         // Sort by soonest date
         fetchedEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
-
         setEvents(fetchedEvents);
+
         // Default to earliest
         setSelectedEvent(fetchedEvents.length ? fetchedEvents[0] : null);
       } catch (error) {
@@ -174,24 +178,40 @@ function Home() {
         clearTimeout(confettiTimeoutId);
         setConfettiTimeoutId(null);
       }
-      // Delete old finished event
       deleteEventById(confettiEventId);
-      // Stop confetti
       setConfettiEventId(null);
     }
-    // Now select the new event
+
+    // Reset countdownMode to days by default when switching events
+    setCountdownMode("days");
     setSelectedEvent(event);
+  };
+
+  // =========================
+  // ========== TOGGLE VIEW BY CLICKING EVENT NAME
+  // =========================
+  const handleEventNameClick = () => {
+    if (!selectedEvent) return;
+
+    // Check how many days left in the event
+    const distanceMs = new Date(selectedEvent.date).getTime() - Date.now();
+    const daysLeft = Math.floor(distanceMs / (1000 * 60 * 60 * 24));
+
+    // If less than 1 day left, do nothing
+    if (daysLeft < 1) return;
+
+    // Otherwise toggle
+    setCountdownMode((prev) => (prev === "days" ? "hms" : "days"));
   };
 
   // =========================
   // ========== CONFETTI + DELETE LOGIC
   // =========================
   const startConfetti = (eventId) => {
-    if (confettiEventId) return; // already celebrating
+    if (confettiEventId) return;
 
     setConfettiEventId(eventId);
 
-    // 1-minute timer
     const timer = setTimeout(() => {
       deleteEventById(eventId);
       setConfettiEventId(null);
@@ -277,8 +297,13 @@ function Home() {
         </Button>
       )}
 
-      {/* Event Name */}
-      <Typography variant="h4" mb={2}>
+      {/* Event Name - Click to toggle view, if >= 1 day remains */}
+      <Typography
+        variant="h4"
+        mb={2}
+        onClick={handleEventNameClick}  // <--- toggles between 'days' & 'hms'
+        sx={{ cursor: "pointer", userSelect: "none" }}
+      >
         {selectedEvent ? selectedEvent.name : "No Event Selected"}
       </Typography>
 
@@ -299,6 +324,7 @@ function Home() {
           <CountdownDisplay
             targetDate={getTargetDate()}
             eventId={selectedEvent.id}
+            countdownMode={countdownMode}   // pass the mode down
             onCountdownFinish={handleCountdownFinish}
           />
         </Box>
