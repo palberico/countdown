@@ -53,6 +53,7 @@ function Home() {
   const [finishedEventId, setFinishedEventId] = useState(null);
   const [confettiEventId, setConfettiEventId] = useState(null);
   const [confettiTimeoutId, setConfettiTimeoutId] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(false); // New state to control confetti visibility
 
   // Countdown view mode
   const [countdownMode, setCountdownMode] = useState("days");
@@ -74,20 +75,16 @@ function Home() {
       try {
         let fetchedEvents = [];
         if (!db) {
-          // Use mock data if Firestore is unavailable
           fetchedEvents = [
             { id: "1", name: "Cruise", date: "2025-04-01T00:00:00" },
             { id: "2", name: "Disneyland", date: "2025-05-15T10:30:00" },
           ];
-          // REMOVED success notifications for initial load
         } else {
           const querySnapshot = await getDocs(collection(db, "events"));
           querySnapshot.forEach((docSnap) => {
             fetchedEvents.push({ id: docSnap.id, ...docSnap.data() });
           });
-          // REMOVED success notifications for initial load
         }
-        // Sort events by date (earliest first)
         fetchedEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
         setEvents(fetchedEvents);
         setSelectedEvent(fetchedEvents.length ? fetchedEvents[0] : null);
@@ -167,9 +164,9 @@ function Home() {
   // ============================
   const handleSelectEvent = (event) => {
     if (confettiEventId && confettiEventId !== event.id) {
+      setShowConfetti(false); // Stop confetti if switching events
       setConfettiEventId(null);
     }
-    // Reset countdown view
     setCountdownMode("days");
     setSelectedEvent(event);
   };
@@ -181,7 +178,7 @@ function Home() {
     if (!selectedEvent) return;
     const distanceMs = new Date(selectedEvent.date).getTime() - Date.now();
     const daysLeft = Math.floor(distanceMs / (1000 * 60 * 60 * 24));
-    if (daysLeft < 1) return; // Under 1 day => no toggle
+    if (daysLeft < 1) return;
     setCountdownMode((prev) => (prev === "days" ? "hms" : "days"));
   };
 
@@ -192,7 +189,9 @@ function Home() {
     if (!finishedEventId) {
       setFinishedEventId(eventId);
       setConfettiEventId(eventId);
+      setShowConfetti(true); // Start confetti
       const timer = setTimeout(() => {
+        setShowConfetti(false); // Stop confetti
         deleteEventById(eventId);
         setFinishedEventId(null);
         setConfettiTimeoutId(null);
@@ -234,6 +233,7 @@ function Home() {
     return () => {
       if (confettiTimeoutId) {
         clearTimeout(confettiTimeoutId);
+        setShowConfetti(false); // Ensure confetti stops on cleanup
       }
     };
   }, [selectedEvent, finishedEventId, confettiTimeoutId]);
@@ -255,11 +255,11 @@ function Home() {
       }}
     >
       {/* Conditional Confetti */}
-      {confettiEventId ? (
+      {showConfetti && confettiEventId ? (
         <Confetti style={{ pointerEvents: "none" }} run={true} recycle={true} />
       ) : null}
 
-      {/* EVENT NAME => extra marginTop to move it down */}
+      {/* EVENT NAME */}
       <Typography
         variant="h4"
         sx={{ mt: 6, mb: -2, cursor: "pointer", userSelect: "none" }}

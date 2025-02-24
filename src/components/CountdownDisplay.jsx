@@ -105,8 +105,7 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
       </Box>
     );
   } else {
-    // "hms" => total hours + mins + secs
-    const totalHours = days * 24 + hrs;
+    // "hms" => days, hours, minutes, seconds
     return (
       <Box
         display="flex"
@@ -123,7 +122,7 @@ function CountdownDisplay({ targetDate, eventId, countdownMode, onCountdownFinis
             padding: 0,
           }}
         >
-          {totalHours}h {mins}m {secs}s
+          {days}d {hrs}h {mins}m {secs}s
         </Typography>
         <Typography
           sx={{
