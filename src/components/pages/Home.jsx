@@ -1,5 +1,5 @@
 // src/pages/Home.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Box,
   IconButton,
@@ -22,14 +22,14 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  updateDoc,
 } from "firebase/firestore";
 
-// Icons
 import AddIcon from "@mui/icons-material/Add";
 import ListIcon from "@mui/icons-material/List";
 
-// Confetti
 import Confetti from "react-confetti";
+import { getEventPhase } from "../utils/time";
 
 function Home() {
   const { db, user, logout } = useFirebase();
@@ -49,11 +49,9 @@ function Home() {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
-  // Confetti & Deletion state
-  const [finishedEventId, setFinishedEventId] = useState(null);
-  const [confettiEventId, setConfettiEventId] = useState(null);
-  const [confettiTimeoutId, setConfettiTimeoutId] = useState(null);
-  const [showConfetti, setShowConfetti] = useState(false); // New state to control confetti visibility
+  // Confetti and deletion scheduling
+  const [showConfetti, setShowConfetti] = useState(false);
+  const deleteTimerRef = useRef(null);
 
   // Countdown view mode
   const [countdownMode, setCountdownMode] = useState("days");
@@ -66,9 +64,7 @@ function Home() {
   };
   const handleCloseSnackbar = () => setSnackbarOpen(false);
 
-  // ============================
-  // ===== FETCH EVENTS =========
-  // ============================
+  // Fetch events
   useEffect(() => {
     const fetchEvents = async () => {
       setLoading(true);
@@ -76,8 +72,8 @@ function Home() {
         let fetchedEvents = [];
         if (!db) {
           fetchedEvents = [
-            { id: "1", name: "Cruise", date: "2025-04-01T00:00:00" },
-            { id: "2", name: "Disneyland", date: "2025-05-15T10:30:00" },
+            { id: "1", name: "Cruise", date: "2025-04-01T00:00:00", createdBy: "demo" },
+            { id: "2", name: "Disneyland", date: "2025-05-15T10:30:00", createdBy: "demo" },
           ];
         } else {
           const querySnapshot = await getDocs(collection(db, "events"));
@@ -85,9 +81,33 @@ function Home() {
             fetchedEvents.push({ id: docSnap.id, ...docSnap.data() });
           });
         }
-        fetchedEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
-        setEvents(fetchedEvents);
-        setSelectedEvent(fetchedEvents.length ? fetchedEvents[0] : null);
+
+        // Remove any items more than 6 hours past the end, but only if owned by the current user
+        const now = Date.now();
+        const keep = [];
+        const toDelete = [];
+
+        for (const e of fetchedEvents) {
+          const phase = getEventPhase(e.date, now).phase;
+          if (phase === "expired") {
+            if (user?.uid && e.createdBy === user.uid) {
+              toDelete.push(e.id);
+            }
+            // Always hide expired items from view
+          } else {
+            keep.push(e);
+          }
+        }
+
+        if (db && toDelete.length > 0) {
+          await Promise.allSettled(
+            toDelete.map((id) => deleteDoc(doc(db, "events", id)))
+          );
+        }
+
+        keep.sort((a, b) => new Date(a.date) - new Date(b.date));
+        setEvents(keep);
+        setSelectedEvent(keep.length ? keep[0] : null);
       } catch (error) {
         console.error(error);
         showNotification("Error fetching events!", "error");
@@ -97,11 +117,10 @@ function Home() {
     };
 
     fetchEvents();
-  }, [db]);
+    // Re-run when user changes so ownership cleanup applies correctly
+  }, [db, user]);
 
-  // ============================
-  // ===== LOGIN / LOGOUT =======
-  // ============================
+  // Login / logout
   const handleLoginModalClose = () => {
     setLoginModalOpen(false);
     if (user) {
@@ -119,9 +138,7 @@ function Home() {
     }
   };
 
-  // ============================
-  // ===== ADD / SAVE EVENT =====
-  // ============================
+  // Add / save event
   const handleOpenEventSetup = () => {
     if (!user) {
       setLoginModalOpen(true);
@@ -134,7 +151,7 @@ function Home() {
     setLoading(true);
     try {
       if (!db) {
-        const newEvent = { id: `${events.length + 1}`, ...eventData };
+        const newEvent = { id: `${events.length + 1}`, ...eventData, createdBy: user?.uid || "demo" };
         const newEvents = [...events, newEvent].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
@@ -142,8 +159,9 @@ function Home() {
         setSelectedEvent(newEvents[0]);
         showNotification("Event added (local)!");
       } else {
-        const docRef = await addDoc(collection(db, "events"), eventData);
-        const newEvent = { id: docRef.id, ...eventData };
+        const payload = { ...eventData, createdBy: user.uid };
+        const docRef = await addDoc(collection(db, "events"), payload);
+        const newEvent = { id: docRef.id, ...payload };
         const newEvents = [...events, newEvent].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
@@ -159,21 +177,19 @@ function Home() {
     }
   };
 
-  // ============================
-  // ===== SELECT EVENT =========
-  // ============================
+  // Select event
   const handleSelectEvent = (event) => {
-    if (confettiEventId && confettiEventId !== event.id) {
-      setShowConfetti(false); // Stop confetti if switching events
-      setConfettiEventId(null);
+    if (deleteTimerRef.current) {
+      clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
     }
+    setShowConfetti(false);
+
     setCountdownMode("days");
     setSelectedEvent(event);
   };
 
-  // ============================
-  // ===== TOGGLE COUNTDOWN VIEW =
-  // ============================
+  // Toggle countdown view
   const handleEventNameClick = () => {
     if (!selectedEvent) return;
     const distanceMs = new Date(selectedEvent.date).getTime() - Date.now();
@@ -182,61 +198,130 @@ function Home() {
     setCountdownMode((prev) => (prev === "days" ? "hms" : "days"));
   };
 
-  // ============================
-  // === CONFETTI & DELETION LOGIC =
-  // ============================
-  const handleCountdownFinish = (eventId) => {
-    if (!finishedEventId) {
-      setFinishedEventId(eventId);
-      setConfettiEventId(eventId);
-      setShowConfetti(true); // Start confetti
-      const timer = setTimeout(() => {
-        setShowConfetti(false); // Stop confetti
-        deleteEventById(eventId);
-        setFinishedEventId(null);
-        setConfettiTimeoutId(null);
-        setConfettiEventId(null);
-      }, 60000);
-      setConfettiTimeoutId(timer);
-    }
-  };
-
+  // Delete helper with ownership check
   const deleteEventById = async (eventId) => {
     try {
+      const target = events.find((e) => e.id === eventId);
+      if (!target) return;
+      if (!user || target.createdBy !== user.uid) {
+        showNotification("You can only delete events you created", "error");
+        return;
+      }
+
       if (db) {
         await deleteDoc(doc(db, "events", eventId));
       }
       setEvents((prev) => {
         const updated = prev.filter((e) => e.id !== eventId);
+        updated.sort((a, b) => new Date(a.date) - new Date(b.date));
         if (selectedEvent && selectedEvent.id === eventId) {
-          if (updated.length > 0) {
-            updated.sort((a, b) => new Date(a.date) - new Date(b.date));
-            setSelectedEvent(updated[0]);
-          } else {
-            setSelectedEvent(null);
-          }
+          setSelectedEvent(updated[0] || null);
         }
         return updated;
       });
+      showNotification("Event deleted");
     } catch (err) {
       console.error("Error deleting event:", err);
+      showNotification("Delete failed", "error");
     }
   };
 
-  useEffect(() => {
-    if (selectedEvent) {
-      const distance = new Date(selectedEvent.date).getTime() - Date.now();
-      if (distance <= 0 && !finishedEventId) {
-        handleCountdownFinish(selectedEvent.id);
+  // Edit helper with ownership check
+  const handleUpdateEvent = async (eventId, updates) => {
+    try {
+      const target = events.find((e) => e.id === eventId);
+      if (!target) return;
+      if (!user || target.createdBy !== user.uid) {
+        showNotification("You can only edit events you created", "error");
+        return;
       }
+
+      if (db) {
+        await updateDoc(doc(db, "events", eventId), {
+          name: updates.name,
+          date: updates.date,
+        });
+      }
+
+      setEvents((prev) => {
+        const updated = prev.map((e) =>
+          e.id === eventId ? { ...e, name: updates.name, date: updates.date } : e
+        );
+        updated.sort((a, b) => new Date(a.date) - new Date(b.date));
+        // Keep selection sensible
+        if (selectedEvent) {
+          const newSel = updated.find((e) => e.id === selectedEvent.id) || updated[0] || null;
+          setSelectedEvent(newSel);
+        }
+        return updated;
+      });
+      showNotification("Event updated");
+    } catch (err) {
+      console.error("Error updating event:", err);
+      showNotification("Update failed", "error");
     }
+  };
+
+  // Countdown finished callback from CountdownDisplay
+  const handleCountdownFinish = (eventId) => {
+    if (!selectedEvent || selectedEvent.id !== eventId) return;
+
+    const { phase, remainingMs } = getEventPhase(selectedEvent.date, Date.now());
+    if (phase !== "celebrate") return;
+
+    setShowConfetti(true);
+
+    if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+    deleteTimerRef.current = setTimeout(async () => {
+      setShowConfetti(false);
+      // Only the owner’s client will be allowed to delete. Others will just stop seeing it.
+      await deleteEventById(eventId);
+      deleteTimerRef.current = null;
+    }, Math.max(0, remainingMs));
+  };
+
+  // Keep celebration and deletion logic correct on load and when changing events
+  useEffect(() => {
+    if (deleteTimerRef.current) {
+      clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
+    }
+    setShowConfetti(false);
+
+    if (!selectedEvent) return;
+
+    const now = Date.now();
+    const { phase, remainingMs } = getEventPhase(selectedEvent.date, now);
+
+    if (phase === "celebrate") {
+      setShowConfetti(true);
+      deleteTimerRef.current = setTimeout(async () => {
+        setShowConfetti(false);
+        await deleteEventById(selectedEvent.id);
+        deleteTimerRef.current = null;
+      }, remainingMs);
+    }
+
+    if (phase === "expired") {
+      // Hide immediately. Delete only if owner, handled inside deleteEventById
+      deleteEventById(selectedEvent.id);
+    }
+
     return () => {
-      if (confettiTimeoutId) {
-        clearTimeout(confettiTimeoutId);
-        setShowConfetti(false); // Ensure confetti stops on cleanup
+      if (deleteTimerRef.current) {
+        clearTimeout(deleteTimerRef.current);
+        deleteTimerRef.current = null;
       }
+      setShowConfetti(false);
     };
-  }, [selectedEvent, finishedEventId, confettiTimeoutId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEvent]);
+
+  // Hide fully expired items from any view
+  const visibleEvents = useMemo(() => {
+    const now = Date.now();
+    return events.filter((e) => getEventPhase(e.date, now).phase !== "expired");
+  }, [events]);
 
   const getTargetDate = () => {
     if (!selectedEvent) return new Date();
@@ -254,12 +339,10 @@ function Home() {
         position: "relative",
       }}
     >
-      {/* Conditional Confetti */}
-      {showConfetti && confettiEventId ? (
+      {showConfetti ? (
         <Confetti style={{ pointerEvents: "none" }} run={true} recycle={true} />
       ) : null}
 
-      {/* EVENT NAME */}
       <Typography
         variant="h4"
         sx={{ mt: 6, mb: -2, cursor: "pointer", userSelect: "none" }}
@@ -268,7 +351,6 @@ function Home() {
         {selectedEvent ? selectedEvent.name : "No Event Selected"}
       </Typography>
 
-      {/* COUNTDOWN */}
       {selectedEvent && (
         <Box
           sx={{
@@ -288,7 +370,6 @@ function Home() {
         </Box>
       )}
 
-      {/* BOTTOM CONTROLS */}
       <Box
         sx={{
           position: "absolute",
@@ -300,7 +381,6 @@ function Home() {
           px: 2,
         }}
       >
-        {/* ADD EVENT */}
         <IconButton
           onClick={handleOpenEventSetup}
           sx={{ opacity: 0.2, "&:hover": { opacity: 1 } }}
@@ -308,14 +388,12 @@ function Home() {
           <AddIcon />
         </IconButton>
 
-        {/* LOGOUT */}
         {user && (
           <Button variant="outlined" size="small" onClick={handleLogout}>
             Log Out
           </Button>
         )}
 
-        {/* EVENT SELECTION */}
         <IconButton
           onClick={() => setSelectionModalOpen(true)}
           sx={{ opacity: 0.2, "&:hover": { opacity: 1 } }}
@@ -324,12 +402,14 @@ function Home() {
         </IconButton>
       </Box>
 
-      {/* Modals */}
       <EventSelectionModal
         open={selectionModalOpen}
         onClose={() => setSelectionModalOpen(false)}
-        events={events}
+        events={visibleEvents}
         onSelectEvent={handleSelectEvent}
+        currentUserUid={user?.uid || null}
+        onEdit={handleUpdateEvent}
+        onDelete={deleteEventById}
       />
       <EventSetupModal
         open={setupModalOpen}
@@ -338,7 +418,6 @@ function Home() {
       />
       <LoginModal open={loginModalOpen} onClose={handleLoginModalClose} />
 
-      {/* LOADING SPINNER */}
       <Backdrop
         sx={{ color: "#fff", zIndex: (theme) => theme.zIndex.drawer + 1 }}
         open={loading}
@@ -346,7 +425,6 @@ function Home() {
         <CircularProgress color="inherit" />
       </Backdrop>
 
-      {/* SNACKBAR */}
       <Snackbar
         open={snackbarOpen}
         autoHideDuration={3000}
