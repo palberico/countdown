@@ -142,8 +142,9 @@ function Home() {
         setSelectedEvent(newEvents[0]);
         showNotification("Event added (local)!");
       } else {
-        const docRef = await addDoc(collection(db, "events"), eventData);
-        const newEvent = { id: docRef.id, ...eventData };
+        const docToSave = { ...eventData, createdBy: user.uid };
+        const docRef = await addDoc(collection(db, "events"), docToSave);
+        const newEvent = { id: docRef.id, ...docToSave };
         const newEvents = [...events, newEvent].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
