@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof -ti:5173 -sTCP:LISTEN)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(ps -p 14129 -o pid,command)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(find / -iname \"firestore.rules\" -not -path \"*/node_modules/*\" 2>/dev/null | head -5; echo \"---\"; find ~ -iname \".firebaserc\" -not -path \"*/node_modules/*\" 2>/dev/null | head -5)",
+      "Read(//Users/pete/**)",
+      "Bash(npx eslint *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(ssh-add -l)",
+      "Read(//Users/pete/.ssh/**)",
+      "Bash(ssh-add ~/.ssh/id_rsa)"
+    ]
+  }
+}
